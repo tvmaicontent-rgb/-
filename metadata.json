@@ -1,0 +1,8 @@
+{
+  "name": "Remix Аналитика",
+  "description": "Статистика по отделу контента",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

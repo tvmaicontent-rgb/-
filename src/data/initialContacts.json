@@ -1,0 +1,605 @@
+[
+  {
+    "id": "cont-1",
+    "producer": "Обои Палитра",
+    "site": "https://oboi-palitra.ru/",
+    "contact": "y.zryacheva@kof-palitra.ru",
+    "name": "Юлия А. Зрячева",
+    "productGroups": "Обои",
+    "note": "Отправляют за информацией на сайт, если чего-то не хватает, то обращаться к ним"
+  },
+  {
+    "id": "cont-2",
+    "producer": "Обои Eurodecor",
+    "site": "https://www.euro-decor.ru/",
+    "contact": "gaidai@euro-decor.ru",
+    "name": "Анна",
+    "productGroups": "Обои",
+    "note": "Отвечают долго"
+  },
+  {
+    "id": "cont-3",
+    "producer": "Обои MaxDecor",
+    "site": "https://maxdecor.uz/",
+    "contact": "nponomarenko@yandex.ru",
+    "name": "Наталья",
+    "productGroups": "Обои",
+    "note": "Быстро отвечают, но информацию присылают очень долго (~месяц)"
+  },
+  {
+    "id": "cont-4",
+    "producer": "АКС-мебель",
+    "site": "https://aks.by",
+    "contact": "zezyotko@aks.by",
+    "name": "Тимофей",
+    "productGroups": "",
+    "note": ""
+  },
+  {
+    "id": "cont-5",
+    "producer": "Витебские ковры",
+    "site": "https://prokover.by/",
+    "contact": "salesmanager@prokover.by",
+    "name": "Лидия",
+    "productGroups": "Ковры",
+    "note": "Отвечают достаточно быстро"
+  },
+  {
+    "id": "cont-6",
+    "producer": "Обои Rasch",
+    "site": "https://www.rasch.de",
+    "contact": "vladislav.korakov@rasch.de",
+    "name": "Владислав",
+    "productGroups": "Обои",
+    "note": "Отвечают быстро"
+  },
+  {
+    "id": "cont-7",
+    "producer": "Гомельобои",
+    "site": "https://gomeloboi.by",
+    "contact": "zayats_a@oboi.by",
+    "name": "Оксана",
+    "productGroups": "Обои",
+    "note": "Отвечают долго"
+  },
+  {
+    "id": "cont-8",
+    "producer": "Эрисманн (российское производство)",
+    "site": "https://erismann.ru/",
+    "contact": "Elena.Nikiforova@erismann.ru",
+    "name": "Елена",
+    "productGroups": "Обои",
+    "note": "Отвечают быстро"
+  },
+  {
+    "id": "cont-9",
+    "producer": "АВН-групп",
+    "site": "http://avngroup.by/",
+    "contact": "snab@avngroup.by",
+    "name": "Ирина",
+    "productGroups": "Сантехника",
+    "note": "Отвечают быстро"
+  },
+  {
+    "id": "cont-10",
+    "producer": "СнабСтройСервис",
+    "site": "https://sss.by/",
+    "contact": "y.pastushenko@sss.by",
+    "name": "Юлия",
+    "productGroups": "Сантехника",
+    "note": "Отвечают быстро"
+  },
+  {
+    "id": "cont-11",
+    "producer": "Эргокс",
+    "site": "",
+    "contact": "alex.ribalov@ergox.com\nalexander.putryk@ergox.com",
+    "name": "",
+    "productGroups": "Мангалы",
+    "note": ""
+  },
+  {
+    "id": "cont-12",
+    "producer": "Voda/Esko",
+    "site": "https://esko-voda.ru/",
+    "contact": "alekseeva.a@vodaesko.ru",
+    "name": "Алеся",
+    "productGroups": "Сантехника",
+    "note": "Отвечают долго"
+  },
+  {
+    "id": "cont-13",
+    "producer": "Терминус",
+    "site": "terminus.by",
+    "contact": "opt@terminus.by\ninfo@terminus.by",
+    "name": "Ксения",
+    "productGroups": "Полотенцесушители",
+    "note": "Отвечают быстро"
+  },
+  {
+    "id": "cont-14",
+    "producer": "Агрофирма Поиск",
+    "site": "",
+    "contact": "kwetkiby@mail.ru",
+    "name": "",
+    "productGroups": "Цветочные корневища",
+    "note": "За фото и хар-ками отправляют на оф.сайт производителя https://www.semenasad.ru/"
+  },
+  {
+    "id": "cont-15",
+    "producer": "Диском",
+    "site": "http://www.caparol.by/",
+    "contact": "aleksey.lavrinovich@caparol.by",
+    "name": "",
+    "productGroups": "Краски",
+    "note": ""
+  },
+  {
+    "id": "cont-16",
+    "producer": "КТМ-2000, COMFORT",
+    "site": "",
+    "contact": "zv@ktm-2000.com\nsf@ktm-2000.com",
+    "name": "Владимир\nСергей",
+    "productGroups": "Профиля, пороги",
+    "note": "Можно сразу писать Сергею(продукт-менеджер). Ставим в копию Олю Милевскую для ускорения процесса"
+  },
+  {
+    "id": "cont-17",
+    "producer": "Русский профиль",
+    "site": "",
+    "contact": "izosimov@rusprof.ru",
+    "name": "Игорь",
+    "productGroups": "Профиля, пороги",
+    "note": "Ставим в копию Олю Милевскую для ускорения процесса"
+  },
+  {
+    "id": "cont-18",
+    "producer": "Макропласт",
+    "site": "",
+    "contact": "makroplast@list.ru",
+    "name": "Алексей",
+    "productGroups": "Профиля, пороги",
+    "note": "ставим в копию Олю Милевскую для ускорения процесса"
+  },
+  {
+    "id": "cont-19",
+    "producer": "Идеал (Пластпрофиль)",
+    "site": "",
+    "contact": "sindecor@yandex.ru",
+    "name": "Максим",
+    "productGroups": "Профиля, пороги",
+    "note": "Отвечают быстро. Ставим в копию Олю Милевскую для ускорения процесса"
+  },
+  {
+    "id": "cont-20",
+    "producer": "GROSS",
+    "site": "https://grossaqua.ru/",
+    "contact": "salesrb@grossaqua.ru",
+    "name": "Александр",
+    "productGroups": "Сантехника",
+    "note": ""
+  },
+  {
+    "id": "cont-21",
+    "producer": "Гаусс Лайтинг ООО",
+    "site": "https://gauss.ru/",
+    "contact": "a.filatova@gauss.ru",
+    "name": "Филатова Анастасия",
+    "productGroups": "Освещение-Gauss",
+    "note": ""
+  },
+  {
+    "id": "cont-22",
+    "producer": "Никлайтинг ООО (General, Feron)",
+    "site": "https://generallamp.ru/\nhttps://feron.ru/",
+    "contact": "a.pozdniakov@n-l.by",
+    "name": "Алексей Поздняков",
+    "productGroups": "Освещение",
+    "note": ""
+  },
+  {
+    "id": "cont-23",
+    "producer": "СВЕТ ЧПТУП - Apeyron",
+    "site": "https://apeyronled.ru/",
+    "contact": "e.lysenok@elekt-svet.com",
+    "name": "Елена Лысёнок",
+    "productGroups": "Освещение",
+    "note": ""
+  },
+  {
+    "id": "cont-24",
+    "producer": "Philips - Сигнифай Евразия ООО",
+    "site": "https://www.lighting.philips.ru/",
+    "contact": "ivan.kozlov@signify.com",
+    "name": "Иван Козлов",
+    "productGroups": "Освещение",
+    "note": ""
+  },
+  {
+    "id": "cont-25",
+    "producer": "TDM – Мион-Комплект ООО",
+    "site": "https://tdme.ru/",
+    "contact": "kurganovich@mion.by",
+    "name": "Андрей Курганович",
+    "productGroups": "Освещение",
+    "note": ""
+  },
+  {
+    "id": "cont-26",
+    "producer": "Эрисманн (немецкое производство)",
+    "site": "https://www.erismann.de/",
+    "contact": "irina.fuchs@erismann.de\nVitali.Zeiser@erismann.de",
+    "name": "Ирина\nВиталий",
+    "productGroups": "Обои",
+    "note": "Можно писать сразу Виталию, отвечает достаточно быстро"
+  },
+  {
+    "id": "cont-27",
+    "producer": "IDDIS и Milardo",
+    "site": "",
+    "contact": "rahmankulova@skl-co.ru",
+    "name": "Рахманкулова Диана",
+    "productGroups": "Сантехника",
+    "note": ""
+  },
+  {
+    "id": "cont-28",
+    "producer": "Синдекор (LM Decor)",
+    "site": "www.sindecor.by",
+    "contact": "sindecor@yandex.ru",
+    "name": "Максим",
+    "productGroups": "Рулонные шторы",
+    "note": ""
+  },
+  {
+    "id": "cont-29",
+    "producer": "Белинка (клеи Pufas)",
+    "site": "",
+    "contact": "st.belinka@yandex.by",
+    "name": "Александр",
+    "productGroups": "Клей",
+    "note": ""
+  },
+  {
+    "id": "cont-30",
+    "producer": "Флазон ОДО",
+    "site": "",
+    "contact": "odoflazon@gmail.com",
+    "name": "Ольга",
+    "productGroups": "Ковры",
+    "note": "Banyolin Hali\nZeria Home Textil Sanayi Tic.Ltd.Sti.\nHALILOGLU DIS TICARET LTD. STI.\nVonateks Dis Ticaret LTD.STI"
+  },
+  {
+    "id": "cont-31",
+    "producer": "Коммерческий департамент SHAHINTEX",
+    "site": "",
+    "contact": "sale@shahintex.ru",
+    "name": "Евгения",
+    "productGroups": "Ковры",
+    "note": "ШАХИНТЕКС\nCARETTA HOME"
+  },
+  {
+    "id": "cont-32",
+    "producer": "Не мелочи жизни",
+    "site": "",
+    "contact": "zakaz@kovriki.by",
+    "name": "Юрий",
+    "productGroups": "Коврики",
+    "note": ""
+  },
+  {
+    "id": "cont-33",
+    "producer": "Вилина",
+    "site": "",
+    "contact": "novikova_es@vilina.ru",
+    "name": "Елена",
+    "productGroups": "Коврики",
+    "note": ""
+  },
+  {
+    "id": "cont-34",
+    "producer": "Ичанки",
+    "site": "",
+    "contact": "b.ogabek.nbs@gmail.com\nmarufjon.otaboev@mail.ru",
+    "name": "",
+    "productGroups": "Обои самоклеящиеся",
+    "note": "Отвечают очень долго, в интернете информации по их товарам нет"
+  },
+  {
+    "id": "cont-35",
+    "producer": "АС МАРТ/АС ФОРОС (бренд New Fusion)",
+    "site": "",
+    "contact": "lux@asforos.by",
+    "name": "Александра Копцевич",
+    "productGroups": "Рулонные шторы",
+    "note": ""
+  },
+  {
+    "id": "cont-36",
+    "producer": "Vertigo",
+    "site": "",
+    "contact": "damianzagorski7@gmail.com",
+    "name": "Дамиан",
+    "productGroups": "Рулонные шторы",
+    "note": "Польша, не отвечают вообще)"
+  },
+  {
+    "id": "cont-37",
+    "producer": "ЧП Интерключ",
+    "site": "",
+    "contact": "shop@interkey.by",
+    "name": "Ольга Зыль",
+    "productGroups": "Цилиндровые механизмы",
+    "note": "Нинбо Хонест Хардвеа, отвечают быстро"
+  },
+  {
+    "id": "cont-38",
+    "producer": "УП Кулак",
+    "site": "",
+    "contact": "ypkulak@gmail.com",
+    "name": "Дмитрий",
+    "productGroups": "Цилиндровые механизмы\nМебельные комплектующие",
+    "note": "Иу Ист Драгон (бренд StahlBuro)\nИНГТАН ЗИЮАН ХАРДВЕР КО., ЛТД  (бренд Soller); отвечают быстро"
+  },
+  {
+    "id": "cont-39",
+    "producer": "Артекс",
+    "site": "",
+    "contact": "Koryagina.v@arteks.spb.ru",
+    "name": "Валентина",
+    "productGroups": "Обои",
+    "note": "Отвечают быстро"
+  },
+  {
+    "id": "cont-40",
+    "producer": "IDEAL, CEZAR",
+    "site": "",
+    "contact": "dalexstroy@gmail.com",
+    "name": "Дмитрий",
+    "productGroups": "Плинтуса и аксессуары к ним",
+    "note": ""
+  },
+  {
+    "id": "cont-41",
+    "producer": "MIDAS, DECORA",
+    "site": "",
+    "contact": "",
+    "name": "Оля Милевская",
+    "productGroups": "Плинтуса и аксессуары к ним",
+    "note": ""
+  },
+  {
+    "id": "cont-42",
+    "producer": "IVC",
+    "site": "",
+    "contact": "elena.klimova@ivcgroup.com",
+    "name": "Елена Климова",
+    "productGroups": "Линолеум",
+    "note": ""
+  },
+  {
+    "id": "cont-43",
+    "producer": "Ciret GmbH (бренд Color Expert)",
+    "site": "",
+    "contact": "elena.kuptsova@condor.by",
+    "name": "Елена Купцова",
+    "productGroups": "Малярные валики",
+    "note": ""
+  },
+  {
+    "id": "cont-44",
+    "producer": "Керамик Солюшнс Рус ООО",
+    "site": "",
+    "contact": "d.ignatin@cersanit.ru",
+    "name": "Денис Игнатин",
+    "productGroups": "Сантехника",
+    "note": ""
+  },
+  {
+    "id": "cont-45",
+    "producer": "СКЛ ООО",
+    "site": "",
+    "contact": "boltach@skl-co.ru",
+    "name": "Болтач Андрей",
+    "productGroups": "",
+    "note": ""
+  },
+  {
+    "id": "cont-46",
+    "producer": "Шувалова Елена Николаевна ИП",
+    "site": "",
+    "contact": "elvina.a@aksline.ru",
+    "name": "Эльвина",
+    "productGroups": "Сантехника",
+    "note": ""
+  },
+  {
+    "id": "cont-47",
+    "producer": "ВОДА ООО",
+    "site": "",
+    "contact": "astreika.m@vodaesko.ru",
+    "name": "Максим",
+    "productGroups": "Сантехника",
+    "note": ""
+  },
+  {
+    "id": "cont-48",
+    "producer": "Региональный Склад ООО",
+    "site": "",
+    "contact": "salesrb@grossaqua.ru",
+    "name": "Александр",
+    "productGroups": "Сантехника",
+    "note": ""
+  },
+  {
+    "id": "cont-49",
+    "producer": "Керамин-Столица Инвест УП",
+    "site": "",
+    "contact": "glinaks@keramin.by",
+    "name": "Ксения Глина",
+    "productGroups": "Сантехника",
+    "note": ""
+  },
+  {
+    "id": "cont-50",
+    "producer": "Алмаз-Люкс ООО",
+    "site": "",
+    "contact": "realrecc@mail.ru",
+    "name": "Герман Молчанов",
+    "productGroups": "Сантехника",
+    "note": ""
+  },
+  {
+    "id": "cont-51",
+    "producer": "Бел-Гаммари",
+    "site": "",
+    "contact": "bel-gammary@rambler.ru",
+    "name": "Сергей",
+    "productGroups": "Сантехника",
+    "note": ""
+  },
+  {
+    "id": "cont-52",
+    "producer": "Максресурс",
+    "site": "",
+    "contact": "arshak07@yandex.ru",
+    "name": "Аршак Туманян",
+    "productGroups": "Сантехника",
+    "note": ""
+  },
+  {
+    "id": "cont-53",
+    "producer": "Строймаркетгрупп ООО",
+    "site": "",
+    "contact": "ms_anastasij@mail.ru",
+    "name": "Анастасия",
+    "productGroups": "Сантехника",
+    "note": ""
+  },
+  {
+    "id": "cont-54",
+    "producer": "БЕЛКЗ",
+    "site": "",
+    "contact": "manager1@domozon.by",
+    "name": "Потапенко Виталий",
+    "productGroups": "Сантехника",
+    "note": ""
+  },
+  {
+    "id": "cont-55",
+    "producer": "ЕрвинБел ООО",
+    "site": "",
+    "contact": "keramikaermak@gmail.com",
+    "name": "Сергей",
+    "productGroups": "Сантехника",
+    "note": ""
+  },
+  {
+    "id": "cont-56",
+    "producer": "Триовист ООО",
+    "site": "",
+    "contact": "k.vasilevskii@21vek.by",
+    "name": "Василевский Кирилл",
+    "productGroups": "Сантехника",
+    "note": ""
+  },
+  {
+    "id": "cont-57",
+    "producer": "Аква Фонте ООО",
+    "site": "",
+    "contact": "aqfonte@mail.ru",
+    "name": "",
+    "productGroups": "Сантехника",
+    "note": ""
+  },
+  {
+    "id": "cont-58",
+    "producer": "АЛЬБА СПА ООО",
+    "site": "",
+    "contact": "dubovik@albaspa.by",
+    "name": "Dubovik Maksim",
+    "productGroups": "Сантехника",
+    "note": ""
+  },
+  {
+    "id": "cont-59",
+    "producer": "Белюкс ЛТД ООО",
+    "site": "",
+    "contact": "market@belux.by",
+    "name": "Лаврецкая Ирина",
+    "productGroups": "Сантехника",
+    "note": ""
+  },
+  {
+    "id": "cont-60",
+    "producer": "Аш два О",
+    "site": "",
+    "contact": "6020772@gmail.com",
+    "name": "Александр",
+    "productGroups": "Сантехника",
+    "note": ""
+  },
+  {
+    "id": "cont-61",
+    "producer": "Ривер групп",
+    "site": "",
+    "contact": "rop@river-group.by",
+    "name": "Денис Корешков",
+    "productGroups": "Сантехника",
+    "note": ""
+  },
+  {
+    "id": "cont-62",
+    "producer": "Терва ООО",
+    "site": "",
+    "contact": "28@terwa.by",
+    "name": "Павел",
+    "productGroups": "Сантехника",
+    "note": ""
+  },
+  {
+    "id": "cont-63",
+    "producer": "БелАква Дистрибьюшн ООО",
+    "site": "",
+    "contact": "maxim.malinovskiy@aquaphor.ltd",
+    "name": "Максим",
+    "productGroups": "Сантехника",
+    "note": ""
+  },
+  {
+    "id": "cont-64",
+    "producer": "БелСанТорг ООО",
+    "site": "",
+    "contact": "sergejbabajan@gmail.com",
+    "name": "Сергей Бабаян",
+    "productGroups": "Сантехника",
+    "note": ""
+  },
+  {
+    "id": "cont-65",
+    "producer": "СанитаМебель",
+    "site": "",
+    "contact": "sanitamebel@rambler.ru",
+    "name": "Сергей",
+    "productGroups": "Сантехника",
+    "note": ""
+  },
+  {
+    "id": "cont-66",
+    "producer": "ФАБРИКА МЕБЕЛЬНЫХ ДЕТАЛЕЙ ООО",
+    "site": "",
+    "contact": "garda-fmd@mail.ru",
+    "name": "",
+    "productGroups": "Сантехника",
+    "note": ""
+  },
+  {
+    "id": "cont-67",
+    "producer": "Max Decor",
+    "site": "",
+    "contact": "luqmonmaxdecor@gmail.com",
+    "name": "сотрудник в Узбекистане",
+    "productGroups": "Обои",
+    "note": "телеграм +998959336262, ватсап +998990646211"
+  }
+]

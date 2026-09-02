@@ -525,41 +525,18 @@ export const AnalyticsTab: React.FC = () => {
         status = '🆕 В очереди';
       }
 
-      // Filter by selected month/period
+      // Filter by selected month/period:
+      // - Completed files ('✅ Выполнен') are filtered by completion date for the selected period/month.
+      // - Active files in queue ('🆕 В очереди'), in work ('🔄 В работе'), or on pause ('⏸️ На паузе')
+      //   are ALWAYS included across the entire history / entire addition period.
       if (!activePeriodInfo.isAll && activePeriodInfo.month && activePeriodInfo.year) {
-        const targetM = activePeriodInfo.month;
-        const targetY = activePeriodInfo.year;
-
-        let matchesMonth = false;
         if (status === '✅ Выполнен') {
+          const targetM = activePeriodInfo.month;
+          const targetY = activePeriodInfo.year;
           const dObj = parseDateParts(dateDone);
-          if (dObj && dObj.month === targetM && dObj.year === targetY) {
-            matchesMonth = true;
+          if (!dObj || dObj.month !== targetM || dObj.year !== targetY) {
+            return;
           }
-        } else {
-          // For in work, paused, or queue files: check dateTake, dateAdded, datePause or any product item dates
-          const datesToCheck = [dateDone, dateTake, dateAdded, datePause];
-          for (const d of datesToCheck) {
-            const dObj = parseDateParts(d);
-            if (dObj && dObj.month === targetM && dObj.year === targetY) {
-              matchesMonth = true;
-              break;
-            }
-          }
-          // If not matched, check individual product items upload dates
-          if (!matchesMonth) {
-            for (const item of items) {
-              const dObj = parseDateParts(item.dateUploaded || item.dateTaken || item.dateCompleted);
-              if (dObj && dObj.month === targetM && dObj.year === targetY) {
-                matchesMonth = true;
-                break;
-              }
-            }
-          }
-        }
-
-        if (!matchesMonth) {
-          return;
         }
       }
 

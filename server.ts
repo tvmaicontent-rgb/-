@@ -201,9 +201,83 @@ async function fetchFromSheets() {
   return cachedData;
 }
 
+// Bitrix Links Cache
+let bitrixLinksCache: Record<string, string> | null = null;
+let lastBitrixSyncTime = 0;
+
+async function fetchBitrixLinks(force = false): Promise<Record<string, string>> {
+  if (!force && bitrixLinksCache && Object.keys(bitrixLinksCache).length > 0 && Date.now() - lastBitrixSyncTime < 3600000) {
+    return bitrixLinksCache;
+  }
+  try {
+    const sheetNames = ['Сссылки', 'Ссылки'];
+    for (const sheetName of sheetNames) {
+      try {
+        const sheetUrl = `https://docs.google.com/spreadsheets/d/1vCZQgzBPv8uahr8ckRI1f-TA_QS6Afz2B9NP_ZMj6ek/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+        const res = await fetch(sheetUrl);
+        if (res.ok) {
+          const text = await res.text();
+          if (text && (text.includes('Внешний код') || text.includes('ID элемента') || text.split('\n').length > 10)) {
+            const rows = parseCSV(text).slice(1);
+            const map: Record<string, string> = {};
+            for (const r of rows) {
+              const code = (r[0] || '').trim();
+              const id = (r[1] || '').trim();
+              if (code && id && code !== 'Внешний код') {
+                map[code] = id;
+              }
+            }
+            if (Object.keys(map).length > 0) {
+              bitrixLinksCache = map;
+              lastBitrixSyncTime = Date.now();
+              return bitrixLinksCache;
+            }
+          }
+        }
+      } catch {
+        // try next sheet name
+      }
+    }
+    return bitrixLinksCache || {};
+  } catch (e) {
+    console.error('Error fetching bitrix links:', e);
+    return bitrixLinksCache || {};
+  }
+}
+
 // API Routes
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+app.get('/api/bitrix-links', async (req, res) => {
+  try {
+    const links = await fetchBitrixLinks(req.query.force === 'true');
+    res.json({ success: true, count: Object.keys(links).length, links });
+  } catch (err: any) {
+    console.error('Error in /api/bitrix-links:', err);
+    res.status(500).json({ success: false, error: err.message || 'Ошибка загрузки ссылок' });
+  }
+});
+
+app.post('/api/bitrix-links/lookup', async (req, res) => {
+  try {
+    const { codes } = req.body || {};
+    const links = await fetchBitrixLinks();
+    const result: Record<string, string> = {};
+    if (Array.isArray(codes)) {
+      for (const code of codes) {
+        const c = String(code).trim();
+        if (links[c]) {
+          result[c] = links[c];
+        }
+      }
+    }
+    res.json({ success: true, links: result });
+  } catch (err: any) {
+    console.error('Error in /api/bitrix-links/lookup:', err);
+    res.status(500).json({ success: false, error: err.message || 'Ошибка поиска ссылок' });
+  }
 });
 
 app.get('/api/sync-sheets', async (req, res) => {

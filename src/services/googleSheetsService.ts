@@ -2,6 +2,7 @@ import { ProductItem, TaskItem, CategoryGroup, GroupOrderItem, NewProductItem, S
 import { idb } from './indexedDbService';
 import { storageService } from './storageService';
 import { authService } from './authService';
+import { bitrixLinksService } from './bitrixLinksService';
 import { safeErrorMessage } from '../utils/errorUtils';
 
 export interface SyncResult {
@@ -559,6 +560,7 @@ export class GoogleSheetsService {
     ]);
 
     this.lastSyncTime = nowStr;
+    bitrixLinksService.fetchLinks(true).catch(() => {});
     return {
       success: true,
       contentCount: contentProducts.length,
@@ -695,6 +697,7 @@ export class GoogleSheetsService {
       this.lastSyncTime = data.timestamp || new Date().toLocaleString('ru-RU');
       this.isSyncing = false;
       this.notify();
+      bitrixLinksService.fetchLinks(true).catch(() => {});
 
       return {
         success: true,

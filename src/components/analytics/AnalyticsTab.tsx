@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { storageService } from '../../services/storageService';
 import { exportAnalyticsReportToExcel } from '../../services/excelService';
 import { ProductItem, DepartmentType, CategoryGroup } from '../../types';
-import { SPREADSHEET_URL, KAM_SPREADSHEET_URL, TASKS_SPREADSHEET_URL, GROUPS_SPREADSHEET_URL, SITE_ORDER_SPREADSHEET_URL } from '../../constants';
+import { SPREADSHEET_URL, KAM_SPREADSHEET_URL, TASKS_SPREADSHEET_URL, GROUPS_SPREADSHEET_URL, SITE_ORDER_SPREADSHEET_URL, calculateBusinessDays } from '../../constants';
 import { GroupsMonthlyTrendCard } from './GroupsMonthlyTrendCard';
 import { SortHeader } from '../common/SortHeader';
 import { SortConfig, sortData } from '../../utils/sortUtils';
@@ -35,7 +35,11 @@ import {
   Package,
   Table as TableIcon,
   LineChart as LineChartIcon,
-  BarChart2
+  BarChart2,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  Filter
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -53,14 +57,24 @@ import {
   Legend
 } from 'recharts';
 
-export interface ExecutorStat {
+export interface AnalyticsFileItem {
+  id: string;
+  fileName: string;
+  group3: string;
+  department: DepartmentType;
   executor: string;
-  department: string;
-  completedSku: number;
-  inWorkSku: number;
-  pausedSku: number;
-  newSku: number;
+  status: '✅ Выполнен' | '🔄 В работе' | '⏸️ На паузе' | '🆕 В очереди';
   totalSku: number;
+  doneCount: number;
+  inWorkCount: number;
+  pausedCount: number;
+  newCount: number;
+  startDate: string;
+  completionDate: string;
+  addedDate: string;
+  pauseDate: string;
+  pauseReason: string;
+  daysPassed: number;
 }
 
 export interface PauseReasonStat {
@@ -170,7 +184,6 @@ const SHORT_MONTH_NAMES_RU: Record<number, string> = {
 
 export const AnalyticsTab: React.FC = () => {
   const [selectedDept, setSelectedDept] = useState<'all' | DepartmentType>('all');
-  const [searchExecutor, setSearchExecutor] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Month selection filter ('current' | 'YYYY-MM' | 'all')
@@ -187,11 +200,16 @@ export const AnalyticsTab: React.FC = () => {
   const [addedProductsModalMonth, setAddedProductsModalMonth] = useState<string>('all');
   const [completedFileSearch, setCompletedFileSearch] = useState('');
 
-  // Sorting configs for executors
-  const [executorSort, setExecutorSort] = useState<SortConfig<ExecutorStat>>({
-    key: 'completedSku',
+  // File Registry State (3 tabs: 'completed' | 'inWorkAndPause' | 'queue')
+  const [activeFileTab, setActiveFileTab] = useState<'completed' | 'inWorkAndPause' | 'queue'>('completed');
+  const [searchFile, setSearchFile] = useState('');
+  const [inWorkSubFilter, setInWorkSubFilter] = useState<'all' | 'inWork' | 'paused'>('all');
+  const [fileSortConfig, setFileSortConfig] = useState<SortConfig<AnalyticsFileItem>>({
+    key: 'completionDate',
     direction: 'desc',
   });
+  const [fileCurrentPage, setFileCurrentPage] = useState<number>(1);
+  const [filePageSize, setFilePageSize] = useState<number>(25);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -361,101 +379,206 @@ export const AnalyticsTab: React.FC = () => {
     };
   }, [filteredProducts, activePeriodInfo]);
 
-  // 2. Executors Statistics & Breakdown
-  const executorStats = useMemo<ExecutorStat[]>(() => {
-    const map = new Map<string, {
-      executor: string;
-      departments: Set<string>;
-      completedSku: number;
-      inWorkSku: number;
-      pausedSku: number;
-      newSku: number;
-      totalSku: number;
-    }>();
+  // 2. All Files Aggregation & Registry (3 Tabs: completed, inWorkAndPause, queue)
+  // Filtered by selected month/period from the Operational Analytics block
+  const allFilesList = useMemo<AnalyticsFileItem[]>(() => {
+    const fileMap = new Map<string, ProductItem[]>();
 
     filteredProducts.forEach(p => {
-      const rawExec = (p.executor || '').trim();
-      const exec = rawExec || 'Не назначен';
-      const key = exec.toLowerCase();
-
-      if (!map.has(key)) {
-        map.set(key, {
-          executor: exec,
-          departments: new Set([p.department]),
-          completedSku: 0,
-          inWorkSku: 0,
-          pausedSku: 0,
-          newSku: 0,
-          totalSku: 0,
-        });
+      const rawFile = (p.sourceFile || '').trim() || 'Без имени файла';
+      if (!fileMap.has(rawFile)) {
+        fileMap.set(rawFile, []);
       }
-
-      const entry = map.get(key)!;
-      entry.departments.add(p.department);
-      entry.totalSku++;
-
-      const s = (p.status || '').toLowerCase();
-      if (s.includes('выполн') || s.includes('заверш') || s.includes('готово')) {
-        entry.completedSku++;
-      } else if (s.includes('работ')) {
-        entry.inWorkSku++;
-      } else if (s.includes('пауз')) {
-        entry.pausedSku++;
-      } else {
-        entry.newSku++;
-      }
+      fileMap.get(rawFile)!.push(p);
     });
 
-    return Array.from(map.values()).map(e => {
-      let deptDisplay = '';
-      if (selectedDept !== 'all') {
-        deptDisplay = selectedDept;
-      } else {
-        if (e.departments.size > 1) {
-          deptDisplay = 'Контент + КАМ';
+    const list: AnalyticsFileItem[] = [];
+
+    fileMap.forEach((items, fileName) => {
+      const total = items.length;
+      const first = items[0];
+
+      const getCleanVal = (getter: (p: ProductItem) => string | undefined) => {
+        for (const p of items) {
+          const val = getter(p)?.trim();
+          if (val && val.toLowerCase() !== 'nan' && val.toLowerCase() !== 'none' && val.toLowerCase() !== 'null') {
+            return val;
+          }
+        }
+        return '';
+      };
+
+      let doneCnt = 0;
+      let inWorkCnt = 0;
+      let pausedCnt = 0;
+      let newCnt = 0;
+
+      items.forEach(p => {
+        const s = (p.status || '').toLowerCase().trim();
+        if (s.includes('выполн') || s.includes('заверш') || s.includes('готово')) {
+          doneCnt++;
+        } else if (s.includes('пауз')) {
+          pausedCnt++;
+        } else if (s.includes('работ')) {
+          inWorkCnt++;
         } else {
-          deptDisplay = Array.from(e.departments)[0] || 'Все отделы';
+          newCnt++;
+        }
+      });
+
+      const dateDone = getCleanVal(p => p.dateCompleted || p.dateFinished);
+      const dateTake = getCleanVal(p => p.dateTaken);
+      const pauseReason = getCleanVal(p => p.pauseReason);
+      const datePause = getCleanVal(p => p.pauseDate);
+      const dateAdded = getCleanVal(p => p.dateUploaded);
+      const executor = getCleanVal(p => p.executor) || 'Не назначен';
+      const group3 = getCleanVal(p => p.group3) || 'Общая группа';
+
+      const firstStatus = (first.status || '').toLowerCase().trim();
+      const isCompleted = ['выполнено', 'выполнен', 'завершен', '✅ выполнен', '✅ завершена'].some(s => firstStatus.includes(s)) || (doneCnt === total && total > 0);
+      const isPaused = ['пауза', 'на паузе', '⏸️ на паузе', '⏸'].some(s => firstStatus.includes(s)) || pausedCnt > 0;
+      const isInWork = ['в работе', 'взято в работу', '🔄 в работе'].some(s => firstStatus.includes(s)) || inWorkCnt > 0 || (Boolean(dateTake) && !isCompleted && !isPaused);
+
+      let status: '✅ Выполнен' | '🔄 В работе' | '⏸️ На паузе' | '🆕 В очереди' = '🆕 В очереди';
+      if (isCompleted) {
+        status = '✅ Выполнен';
+      } else if (isPaused) {
+        status = '⏸️ На паузе';
+      } else if (isInWork) {
+        status = '🔄 В работе';
+      } else {
+        status = '🆕 В очереди';
+      }
+
+      // Filter by selected month/period
+      if (!activePeriodInfo.isAll && activePeriodInfo.month && activePeriodInfo.year) {
+        const targetM = activePeriodInfo.month;
+        const targetY = activePeriodInfo.year;
+
+        let matchesMonth = false;
+        if (status === '✅ Выполнен') {
+          const dObj = parseDateParts(dateDone);
+          if (dObj && dObj.month === targetM && dObj.year === targetY) {
+            matchesMonth = true;
+          }
+        } else {
+          // For in work, paused, or queue files: check dateTake, dateAdded, datePause or any product item dates
+          const datesToCheck = [dateDone, dateTake, dateAdded, datePause];
+          for (const d of datesToCheck) {
+            const dObj = parseDateParts(d);
+            if (dObj && dObj.month === targetM && dObj.year === targetY) {
+              matchesMonth = true;
+              break;
+            }
+          }
+          // If not matched, check individual product items upload dates
+          if (!matchesMonth) {
+            for (const item of items) {
+              const dObj = parseDateParts(item.dateUploaded || item.dateTaken || item.dateCompleted);
+              if (dObj && dObj.month === targetM && dObj.year === targetY) {
+                matchesMonth = true;
+                break;
+              }
+            }
+          }
+        }
+
+        if (!matchesMonth) {
+          return;
         }
       }
 
-      return {
-        executor: e.executor,
-        department: deptDisplay,
-        completedSku: e.completedSku,
-        inWorkSku: e.inWorkSku,
-        pausedSku: e.pausedSku,
-        newSku: e.newSku,
-        totalSku: e.totalSku,
-      };
+      const calcBaseDate = status === '✅ Выполнен'
+        ? dateDone
+        : (status === '🔄 В работе'
+            ? (dateTake || dateAdded)
+            : (status === '⏸️ На паузе'
+                ? (datePause || dateTake || dateAdded)
+                : dateAdded));
+      const daysPassed = calculateBusinessDays(calcBaseDate || dateAdded);
+
+      list.push({
+        id: fileName,
+        fileName,
+        group3,
+        department: first.department,
+        executor,
+        status,
+        totalSku: total,
+        doneCount: doneCnt,
+        inWorkCount: inWorkCnt,
+        pausedCount: pausedCnt,
+        newCount: newCnt,
+        startDate: dateTake,
+        completionDate: dateDone,
+        addedDate: dateAdded,
+        pauseDate: datePause,
+        pauseReason,
+        daysPassed,
+      });
     });
-  }, [filteredProducts, selectedDept]);
 
-  // Top performers for Bar Chart
-  const topExecutorsChartData = useMemo(() => {
-    return [...executorStats]
-      .filter(e => e.executor !== 'Не назначен' && (e.completedSku > 0 || e.inWorkSku > 0 || e.pausedSku > 0 || e.newSku > 0))
-      .sort((a, b) => b.completedSku - a.completedSku || b.totalSku - a.totalSku)
-      .slice(0, 12)
-      .map(e => ({
-        name: e.executor.length > 15 ? `${e.executor.slice(0, 13)}...` : e.executor,
-        fullName: e.executor,
-        department: e.department,
-        'Выполнено': e.completedSku,
-        'В работе': e.inWorkSku,
-        'На паузе': e.pausedSku,
-        'В очереди': e.newSku,
-      }));
-  }, [executorStats]);
+    return list;
+  }, [filteredProducts, activePeriodInfo]);
 
-  // Filtered & Sorted Executors for Table
-  const sortedExecutors = useMemo(() => {
-    let list = executorStats;
-    if (searchExecutor.trim()) {
-      const q = searchExecutor.toLowerCase();
-      list = list.filter(e => e.executor.toLowerCase().includes(q) || e.department.toLowerCase().includes(q));
+  // Three distinct file lists for each tab
+  const completedFilesList = useMemo(() => {
+    return allFilesList.filter(f => f.status === '✅ Выполнен');
+  }, [allFilesList]);
+
+  const inWorkAndPauseFilesList = useMemo(() => {
+    return allFilesList.filter(f => f.status === '🔄 В работе' || f.status === '⏸️ На паузе');
+  }, [allFilesList]);
+
+  const queueFilesList = useMemo(() => {
+    return allFilesList.filter(f => f.status === '🆕 В очереди');
+  }, [allFilesList]);
+
+  // Raw file list for currently active tab
+  const currentTabRawList = useMemo(() => {
+    if (activeFileTab === 'completed') {
+      return completedFilesList;
     }
-    return sortData(list, executorSort);
-  }, [executorStats, searchExecutor, executorSort]);
+    if (activeFileTab === 'inWorkAndPause') {
+      if (inWorkSubFilter === 'inWork') {
+        return inWorkAndPauseFilesList.filter(f => f.status === '🔄 В работе');
+      }
+      if (inWorkSubFilter === 'paused') {
+        return inWorkAndPauseFilesList.filter(f => f.status === '⏸️ На паузе');
+      }
+      return inWorkAndPauseFilesList;
+    }
+    return queueFilesList;
+  }, [activeFileTab, completedFilesList, inWorkAndPauseFilesList, queueFilesList, inWorkSubFilter]);
+
+  // Filtered & Sorted files list
+  const filteredAndSortedFiles = useMemo(() => {
+    let list = currentTabRawList;
+    if (searchFile.trim()) {
+      const q = searchFile.toLowerCase().trim();
+      list = list.filter(
+        f =>
+          f.fileName.toLowerCase().includes(q) ||
+          f.group3.toLowerCase().includes(q) ||
+          f.executor.toLowerCase().includes(q) ||
+          f.department.toLowerCase().includes(q) ||
+          (f.pauseReason && f.pauseReason.toLowerCase().includes(q))
+      );
+    }
+    return sortData(list, fileSortConfig);
+  }, [currentTabRawList, searchFile, fileSortConfig]);
+
+  // Pagination for Files Registry
+  const totalFilePages = Math.max(1, Math.ceil(filteredAndSortedFiles.length / filePageSize));
+  const paginatedFiles = useMemo(() => {
+    const start = (fileCurrentPage - 1) * filePageSize;
+    return filteredAndSortedFiles.slice(start, start + filePageSize);
+  }, [filteredAndSortedFiles, fileCurrentPage, filePageSize]);
+
+  // Reset pagination when active tab, search, or filters change
+  React.useEffect(() => {
+    setFileCurrentPage(1);
+  }, [activeFileTab, searchFile, inWorkSubFilter, selectedDept]);
 
   // 3. Pause Reasons Analysis
   const pauseReasonStats = useMemo<PauseReasonStat[]>(() => {
@@ -669,27 +792,42 @@ export const AnalyticsTab: React.FC = () => {
         'Прирост к пред. месяцу (%)': m.momGrowthPct !== null ? `${m.momGrowthPct > 0 ? '+' : ''}${m.momGrowthPct}%` : '—',
       }));
 
-      // 3. Completed Files in Period sheet
-      const completedFilesRows = completedFilesInPeriod.map(f => ({
+      // 3. Completed files sheet
+      const completedFilesRows = completedFilesList.map(f => ({
         'Имя файла': f.fileName,
         'Группа 3': f.group3,
-        'Исполнитель': f.executor,
-        'Дата завершения': f.completionDate,
         'Отдел': f.department,
-        'Количество SKU': f.skuCount,
+        'Исполнитель': f.executor,
+        'Дата завершения': f.completionDate || '—',
+        'Дата загрузки': f.addedDate || '—',
+        'SKU (карточек)': f.totalSku,
       }));
 
-      // 4. Executors sheet
-      const execRows = executorStats.map(e => ({
-        'Исполнитель': e.executor,
-        'Отдел': e.department,
-        'Выполнено (SKU)': e.completedSku,
-        'В работе (SKU)': e.inWorkSku,
-        'На паузе (SKU)': e.pausedSku,
-        'В очереди (SKU)': e.newSku,
+      // 4. In work and paused files sheet
+      const inWorkAndPauseRows = inWorkAndPauseFilesList.map(f => ({
+        'Статус': f.status,
+        'Имя файла': f.fileName,
+        'Группа 3': f.group3,
+        'Отдел': f.department,
+        'Исполнитель': f.executor,
+        'Дата взятия': f.startDate || '—',
+        'Дата паузы': f.pauseDate || '—',
+        'Причина паузы': f.pauseReason || '—',
+        'Дней в работе': f.daysPassed,
+        'SKU (карточек)': f.totalSku,
       }));
 
-      // 5. Pause reasons sheet
+      // 5. In queue files sheet
+      const queueRows = queueFilesList.map(f => ({
+        'Имя файла': f.fileName,
+        'Группа 3': f.group3,
+        'Отдел': f.department,
+        'Дата поступления': f.addedDate || '—',
+        'Дней ожидания': f.daysPassed,
+        'SKU (карточек)': f.totalSku,
+      }));
+
+      // 6. Pause reasons sheet
       const pauseRows = pauseReasonStats.map(p => ({
         'Причина паузы': p.reason,
         'Количество SKU': p.count,
@@ -702,9 +840,11 @@ export const AnalyticsTab: React.FC = () => {
       exportAnalyticsReportToExcel({
         kpi: kpiRows,
         monthlyStats: monthlyRows,
-        executors: execRows,
-        categories: completedFilesRows,
+        filesCompleted: completedFilesRows,
+        filesInWorkAndPause: inWorkAndPauseRows,
+        filesInQueue: queueRows,
         pauseReasons: pauseRows,
+        categories: completedFilesRows,
       }, `Аналитический_отчет_${dateStr}`);
 
       showToast('Аналитический отчет успешно выгружен в Excel!');
@@ -713,8 +853,8 @@ export const AnalyticsTab: React.FC = () => {
     }
   };
 
-  const handleExecutorSort = (key: string) => {
-    setExecutorSort(prev => {
+  const handleFileSort = (key: string) => {
+    setFileSortConfig(prev => {
       if (prev.key === key) {
         if (prev.direction === 'asc') return { key, direction: 'desc' };
         if (prev.direction === 'desc') return { key, direction: null };
@@ -753,98 +893,92 @@ export const AnalyticsTab: React.FC = () => {
         </div>
 
         {/* Action buttons & Department / Month Toggle */}
-        <div className="flex flex-wrap items-center gap-2.5">
-          {/* Month / Period Selector Dropdown */}
-          <div className="flex items-center gap-1.5 bg-slate-50 p-1 rounded-xl border border-slate-200">
-            <Calendar className="w-4 h-4 text-slate-500 ml-2" />
-            <select
-              value={selectedPeriod}
-              onChange={e => setSelectedPeriod(e.target.value)}
-              className="bg-transparent text-xs font-bold text-slate-800 focus:outline-none pr-2 py-1 cursor-pointer"
-              title="Выберите отчетный месяц для расчета выведенных товаров"
-            >
-              <option value="current">Текущий месяц ({MONTH_NAMES_RU[currentSysMonth]} {currentSysYear})</option>
-              {availableMonths.map(m => (
-                <option key={m.key} value={m.key}>
-                  {m.label} ({m.count} SKU)
-                </option>
-              ))}
-              <option value="all">За все время</option>
-            </select>
+        <div className="flex flex-wrap items-center justify-between gap-2.5 flex-1">
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Month / Period Selector Dropdown */}
+            <div className="flex items-center gap-1.5 bg-slate-50 p-1 rounded-xl border border-slate-200">
+              <Calendar className="w-4 h-4 text-slate-500 ml-2" />
+              <select
+                value={selectedPeriod}
+                onChange={e => setSelectedPeriod(e.target.value)}
+                className="bg-transparent text-xs font-bold text-slate-800 focus:outline-none pr-2 py-1 cursor-pointer"
+                title="Выберите отчетный месяц для расчета выведенных товаров"
+              >
+                <option value="current">Текущий месяц ({MONTH_NAMES_RU[currentSysMonth]} {currentSysYear})</option>
+                {availableMonths.map(m => (
+                  <option key={m.key} value={m.key}>
+                    {m.label} ({m.count} SKU)
+                  </option>
+                ))}
+                <option value="all">За все время</option>
+              </select>
+            </div>
+
+            {/* Department Filter Toggle */}
+            <div className="inline-flex p-1 bg-slate-100 rounded-xl border border-slate-200">
+              <button
+                type="button"
+                onClick={() => setSelectedDept('all')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  selectedDept === 'all'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Все отделы
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedDept('Отдел контента')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  selectedDept === 'Отдел контента'
+                    ? 'bg-white text-sky-700 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                🎨 Контент
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedDept('Коммерческий отдел')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  selectedDept === 'Коммерческий отдел'
+                    ? 'bg-white text-indigo-700 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                💼 КАМ
+              </button>
+            </div>
           </div>
 
-          {/* Department Filter Toggle */}
-          <div className="inline-flex p-1 bg-slate-100 rounded-xl border border-slate-200">
+          {/* Right Action buttons: Added Products & Excel Export on the same line */}
+          <div className="flex items-center gap-2.5 ml-auto">
+            {/* View Added Products by Month Button */}
             <button
               type="button"
-              onClick={() => setSelectedDept('all')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                selectedDept === 'all'
-                  ? 'bg-white text-slate-900 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
+              onClick={() => {
+                setAddedProductsModalMonth(selectedPeriod === 'current' ? `${currentSysYear}-${String(currentSysMonth).padStart(2, '0')}` : selectedPeriod);
+                setIsAddedProductsModalOpen(true);
+              }}
+              className="px-4 py-2 text-xs font-bold text-white bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 rounded-xl shadow-xs flex items-center gap-2 transition-all cursor-pointer hover:shadow-sky-200 shrink-0"
+              title="Просмотреть детальный реестр добавленных товаров с выбором по месяцам"
             >
-              Все отделы
+              <Package className="w-4 h-4 text-sky-100" />
+              <span>Добавленные товары</span>
             </button>
+
+            {/* Excel Export Button */}
             <button
               type="button"
-              onClick={() => setSelectedDept('Отдел контента')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                selectedDept === 'Отдел контента'
-                  ? 'bg-white text-sky-700 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
+              onClick={handleExportExcel}
+              className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-xs flex items-center gap-2 transition-all cursor-pointer hover:shadow-emerald-200 shrink-0"
+              title="Выгрузить сводный отчет со всеми показателями в формате Excel"
             >
-              🎨 Контент
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedDept('Коммерческий отдел')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                selectedDept === 'Коммерческий отдел'
-                  ? 'bg-white text-indigo-700 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              💼 КАМ
+              <FileSpreadsheet className="w-4 h-4 text-emerald-100" />
+              <span>Экспорт в Excel</span>
             </button>
           </div>
-
-          {/* NEW: View Added Products by Month Button */}
-          <button
-            type="button"
-            onClick={() => {
-              setAddedProductsModalMonth(selectedPeriod === 'current' ? `${currentSysYear}-${String(currentSysMonth).padStart(2, '0')}` : selectedPeriod);
-              setIsAddedProductsModalOpen(true);
-            }}
-            className="px-4 py-2 text-xs font-bold text-white bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 rounded-xl shadow-xs flex items-center gap-2 transition-all cursor-pointer hover:shadow-sky-200"
-            title="Просмотреть детальный реестр добавленных товаров с выбором по месяцам"
-          >
-            <Package className="w-4 h-4 text-sky-100" />
-            <span>Добавленные товары</span>
-          </button>
-
-          {/* Google Sheets Access Help Button */}
-          <button
-            type="button"
-            onClick={() => setIsSheetsHelpModalOpen(true)}
-            className="px-3.5 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl border border-slate-200 flex items-center gap-1.5 transition-all cursor-pointer"
-            title="Открыть ссылки на Google Таблицы и помощь с доступом"
-          >
-            <HelpCircle className="w-4 h-4 text-sky-600" />
-            <span className="hidden sm:inline">Доступ к таблице</span>
-          </button>
-
-          {/* Excel Export Button */}
-          <button
-            type="button"
-            onClick={handleExportExcel}
-            className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-xs flex items-center gap-2 transition-all cursor-pointer hover:shadow-emerald-200"
-            title="Выгрузить сводный отчет со всеми показателями в формате Excel"
-          >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-100" />
-            <span>Экспорт в Excel</span>
-          </button>
         </div>
       </div>
 
@@ -954,210 +1088,675 @@ export const AnalyticsTab: React.FC = () => {
         </div>
       </div>
 
-      {/* 2. Bar Chart: Performer Performance (Full Width, Single Combined Bar per Executor) */}
-      <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-3">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between pb-3 border-b border-slate-100 gap-2">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-emerald-600" />
-            <h3 className="text-sm font-bold text-slate-900">
-              Производительность исполнителей (SKU)
-            </h3>
-            {selectedDept === 'all' && (
-              <span className="text-[11px] font-semibold text-sky-700 bg-sky-50 px-2 py-0.5 rounded-md border border-sky-200">
-                Суммировано по Контенту и КАМ
-              </span>
-            )}
-          </div>
-          <span className="text-xs font-semibold text-slate-500">
-            Топ сотрудников по количеству выполненных и активных карточек
-          </span>
-        </div>
-
-        <div className="h-72 w-full pt-2">
-          {topExecutorsChartData.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-xs text-slate-400">
-              Нет данных об исполнителях в выбранном отделе
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={topExecutorsChartData}
-                margin={{ top: 10, right: 15, left: -10, bottom: 25 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis
-                  dataKey="name"
-                  tick={{ fontSize: 11, fill: '#334155', fontWeight: 600 }}
-                  angle={-15}
-                  textAnchor="end"
-                  interval={0}
-                />
-                <YAxis tick={{ fontSize: 11, fill: '#64748b' }} />
-                <Tooltip
-                  formatter={(val: number | string | undefined, name: string | undefined) => [
-                    `${Number(val || 0).toLocaleString('ru-RU')} SKU`,
-                    name || '',
-                  ]}
-                  contentStyle={{
-                    backgroundColor: '#0f172a',
-                    color: '#ffffff',
-                    borderRadius: '8px',
-                    fontSize: '12px',
-                    border: 'none',
-                  }}
-                  itemStyle={{ color: '#ffffff' }}
-                />
-                <Legend
-                  verticalAlign="top"
-                  align="right"
-                  wrapperStyle={{ paddingBottom: '10px', fontSize: '11px' }}
-                />
-                <Bar dataKey="Выполнено" stackId="a" fill="#10b981" />
-                <Bar dataKey="В работе" stackId="a" fill="#3b82f6" />
-                <Bar dataKey="На паузе" stackId="a" fill="#f59e0b" />
-                <Bar dataKey="В очереди" stackId="a" fill="#94a3b8" radius={[3, 3, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-      </div>
-
-      {/* 3. Detailed Assignee Table */}
+      {/* 2. File Registry with 3 Tabs: Ready / In Work & On Pause / In Queue */}
       <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
-              <Users className="w-4 h-4" />
+        {/* Header with Title and Search */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-sky-50 text-sky-700 rounded-xl border border-sky-100">
+              <Layers className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-slate-900">
-                Таблица по исполнителям
-              </h3>
-              <p className="text-xs text-slate-500">
-                Количество карточек по каждому сотруднику (выполнено, в работе, на паузе и в очереди)
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-slate-900">
+                  Список файлов и партий
+                </h3>
+                {selectedDept === 'all' && (
+                  <span className="text-[11px] font-semibold text-sky-700 bg-sky-50 px-2 py-0.5 rounded-md border border-sky-200">
+                    Контент + КАМ
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Реестр файлов за период ({activePeriodInfo.label}), сгруппированный по статусам исполнения и отделам
               </p>
             </div>
           </div>
 
-          <div className="relative w-full sm:w-72">
+          {/* Search bar */}
+          <div className="relative w-full lg:w-80">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Поиск по исполнителю..."
-              value={searchExecutor}
-              onChange={e => setSearchExecutor(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500 bg-slate-50/50"
+              placeholder="Поиск по файлу, группе, исполнителю, причине..."
+              value={searchFile}
+              onChange={e => setSearchFile(e.target.value)}
+              className="w-full pl-9 pr-8 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500 bg-slate-50/50 hover:bg-white transition-colors"
             />
+            {searchFile && (
+              <button
+                onClick={() => setSearchFile('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                title="Очистить поиск"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </div>
 
+        {/* 3 Main Tabs */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
+          <div className="flex flex-wrap gap-2">
+            {/* Tab 1: Completed Files */}
+            <button
+              onClick={() => setActiveFileTab('completed')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                activeFileTab === 'completed'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200/80'
+              }`}
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Готовые файлы</span>
+              <span className={`ml-1 px-2 py-0.5 rounded-full text-[11px] font-mono font-bold ${
+                activeFileTab === 'completed'
+                  ? 'bg-emerald-700/60 text-white'
+                  : 'bg-emerald-100 text-emerald-800'
+              }`}>
+                {completedFilesList.length}
+              </span>
+            </button>
+
+            {/* Tab 2: In Work and On Pause */}
+            <button
+              onClick={() => setActiveFileTab('inWorkAndPause')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                activeFileTab === 'inWorkAndPause'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200/80'
+              }`}
+            >
+              <Clock className="w-4 h-4" />
+              <span>В работе и на паузе</span>
+              <span className={`ml-1 px-2 py-0.5 rounded-full text-[11px] font-mono font-bold ${
+                activeFileTab === 'inWorkAndPause'
+                  ? 'bg-blue-700/60 text-white'
+                  : 'bg-blue-100 text-blue-800'
+              }`}>
+                {inWorkAndPauseFilesList.length}
+              </span>
+            </button>
+
+            {/* Tab 3: In Queue */}
+            <button
+              onClick={() => setActiveFileTab('queue')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                activeFileTab === 'queue'
+                  ? 'bg-slate-800 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200/80'
+              }`}
+            >
+              <FolderTree className="w-4 h-4" />
+              <span>В очереди</span>
+              <span className={`ml-1 px-2 py-0.5 rounded-full text-[11px] font-mono font-bold ${
+                activeFileTab === 'queue'
+                  ? 'bg-slate-700 text-white'
+                  : 'bg-slate-200 text-slate-700'
+              }`}>
+                {queueFilesList.length}
+              </span>
+            </button>
+          </div>
+
+          {/* SKU Count Summary for Current Active Tab */}
+          <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
+            <span>Суммарно в этой вкладке:</span>
+            <span className="font-bold font-mono text-slate-900 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
+              {currentTabRawList.reduce((s, f) => s + f.totalSku, 0).toLocaleString('ru-RU')} SKU
+            </span>
+          </div>
+        </div>
+
+        {/* Subfilter Pills for Tab 2: In Work and On Pause */}
+        {activeFileTab === 'inWorkAndPause' && (
+          <div className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-200/80 rounded-xl text-xs">
+            <span className="text-slate-500 font-medium pl-1 flex items-center gap-1.5">
+              <Filter className="w-3.5 h-3.5" />
+              Фильтр:
+            </span>
+            <button
+              onClick={() => setInWorkSubFilter('all')}
+              className={`px-3 py-1 rounded-lg font-semibold transition-colors ${
+                inWorkSubFilter === 'all'
+                  ? 'bg-white text-slate-900 shadow-xs border border-slate-200 font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Все ({inWorkAndPauseFilesList.length})
+            </button>
+            <button
+              onClick={() => setInWorkSubFilter('inWork')}
+              className={`px-3 py-1 rounded-lg font-semibold transition-colors ${
+                inWorkSubFilter === 'inWork'
+                  ? 'bg-blue-50 text-blue-800 border border-blue-200 font-bold shadow-xs'
+                  : 'text-slate-600 hover:text-blue-700'
+              }`}
+            >
+              🔄 В работе ({inWorkAndPauseFilesList.filter(f => f.status === '🔄 В работе').length})
+            </button>
+            <button
+              onClick={() => setInWorkSubFilter('paused')}
+              className={`px-3 py-1 rounded-lg font-semibold transition-colors ${
+                inWorkSubFilter === 'paused'
+                  ? 'bg-amber-50 text-amber-800 border border-amber-200 font-bold shadow-xs'
+                  : 'text-slate-600 hover:text-amber-700'
+              }`}
+            >
+              ⏸️ На паузе ({inWorkAndPauseFilesList.filter(f => f.status === '⏸️ На паузе').length})
+            </button>
+          </div>
+        )}
+
+        {/* Files Table */}
         <div className="overflow-x-auto border border-slate-200 rounded-xl">
           <table className="w-full text-xs text-left border-collapse">
             <thead className="bg-slate-50 text-slate-600 uppercase font-mono text-[11px] tracking-wider border-b border-slate-200">
-              <tr>
-                <th className="px-4 py-3 min-w-[180px]">
-                  <SortHeader
-                    label="Исполнитель"
-                    columnKey="executor"
-                    currentSortKey={executorSort.key}
-                    currentDirection={executorSort.direction}
-                    onSort={handleExecutorSort}
-                  />
-                </th>
-                <th className="px-4 py-3 min-w-[150px]">
-                  <SortHeader
-                    label="Отдел"
-                    columnKey="department"
-                    currentSortKey={executorSort.key}
-                    currentDirection={executorSort.direction}
-                    onSort={handleExecutorSort}
-                  />
-                </th>
-                <th className="px-4 py-3 text-center min-w-[120px]">
-                  <SortHeader
-                    label="Выполнено"
-                    columnKey="completedSku"
-                    currentSortKey={executorSort.key}
-                    currentDirection={executorSort.direction}
-                    onSort={handleExecutorSort}
-                    align="center"
-                  />
-                </th>
-                <th className="px-4 py-3 text-center min-w-[120px]">
-                  <SortHeader
-                    label="В работе"
-                    columnKey="inWorkSku"
-                    currentSortKey={executorSort.key}
-                    currentDirection={executorSort.direction}
-                    onSort={handleExecutorSort}
-                    align="center"
-                  />
-                </th>
-                <th className="px-4 py-3 text-center min-w-[120px]">
-                  <SortHeader
-                    label="На паузе"
-                    columnKey="pausedSku"
-                    currentSortKey={executorSort.key}
-                    currentDirection={executorSort.direction}
-                    onSort={handleExecutorSort}
-                    align="center"
-                  />
-                </th>
-                <th className="px-4 py-3 text-center min-w-[120px]">
-                  <SortHeader
-                    label="В очереди"
-                    columnKey="newSku"
-                    currentSortKey={executorSort.key}
-                    currentDirection={executorSort.direction}
-                    onSort={handleExecutorSort}
-                    align="center"
-                  />
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 bg-white">
-              {sortedExecutors.length === 0 ? (
+              {activeFileTab === 'completed' && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
-                    Нет данных по исполнителям
+                  <th className="px-4 py-3 min-w-[220px]">
+                    <SortHeader
+                      label="Имя файла"
+                      columnKey="fileName"
+                      currentSortKey={fileSortConfig.key}
+                      currentDirection={fileSortConfig.direction}
+                      onSort={handleFileSort}
+                    />
+                  </th>
+                  <th className="px-4 py-3 min-w-[150px]">
+                    <SortHeader
+                      label="Группа 3"
+                      columnKey="group3"
+                      currentSortKey={fileSortConfig.key}
+                      currentDirection={fileSortConfig.direction}
+                      onSort={handleFileSort}
+                    />
+                  </th>
+                  <th className="px-4 py-3 min-w-[175px]">
+                    <SortHeader
+                      label="Отдел"
+                      columnKey="department"
+                      currentSortKey={fileSortConfig.key}
+                      currentDirection={fileSortConfig.direction}
+                      onSort={handleFileSort}
+                    />
+                  </th>
+                  <th className="px-4 py-3 min-w-[160px]">
+                    <SortHeader
+                      label="Исполнитель"
+                      columnKey="executor"
+                      currentSortKey={fileSortConfig.key}
+                      currentDirection={fileSortConfig.direction}
+                      onSort={handleFileSort}
+                    />
+                  </th>
+                  <th className="px-4 py-3 text-center min-w-[130px]">
+                    <SortHeader
+                      label="Дата завершения"
+                      columnKey="completionDate"
+                      currentSortKey={fileSortConfig.key}
+                      currentDirection={fileSortConfig.direction}
+                      onSort={handleFileSort}
+                      align="center"
+                    />
+                  </th>
+                  <th className="px-4 py-3 text-center min-w-[120px]">
+                    <SortHeader
+                      label="Дата загрузки"
+                      columnKey="addedDate"
+                      currentSortKey={fileSortConfig.key}
+                      currentDirection={fileSortConfig.direction}
+                      onSort={handleFileSort}
+                      align="center"
+                    />
+                  </th>
+                  <th className="px-4 py-3 text-right min-w-[110px]">
+                    <SortHeader
+                      label="SKU"
+                      columnKey="totalSku"
+                      currentSortKey={fileSortConfig.key}
+                      currentDirection={fileSortConfig.direction}
+                      onSort={handleFileSort}
+                      align="right"
+                    />
+                  </th>
+                </tr>
+              )}
+
+              {activeFileTab === 'inWorkAndPause' && (
+                <tr>
+                  <th className="px-4 py-3 min-w-[120px]">
+                    <SortHeader
+                      label="Статус"
+                      columnKey="status"
+                      currentSortKey={fileSortConfig.key}
+                      currentDirection={fileSortConfig.direction}
+                      onSort={handleFileSort}
+                    />
+                  </th>
+                  <th className="px-4 py-3 min-w-[200px]">
+                    <SortHeader
+                      label="Имя файла"
+                      columnKey="fileName"
+                      currentSortKey={fileSortConfig.key}
+                      currentDirection={fileSortConfig.direction}
+                      onSort={handleFileSort}
+                    />
+                  </th>
+                  <th className="px-4 py-3 min-w-[140px]">
+                    <SortHeader
+                      label="Группа 3"
+                      columnKey="group3"
+                      currentSortKey={fileSortConfig.key}
+                      currentDirection={fileSortConfig.direction}
+                      onSort={handleFileSort}
+                    />
+                  </th>
+                  <th className="px-4 py-3 min-w-[175px]">
+                    <SortHeader
+                      label="Отдел"
+                      columnKey="department"
+                      currentSortKey={fileSortConfig.key}
+                      currentDirection={fileSortConfig.direction}
+                      onSort={handleFileSort}
+                    />
+                  </th>
+                  <th className="px-4 py-3 min-w-[150px]">
+                    <SortHeader
+                      label="Исполнитель"
+                      columnKey="executor"
+                      currentSortKey={fileSortConfig.key}
+                      currentDirection={fileSortConfig.direction}
+                      onSort={handleFileSort}
+                    />
+                  </th>
+                  <th className="px-4 py-3 text-center min-w-[130px]">
+                    <SortHeader
+                      label="Дата взятия / Паузы"
+                      columnKey="startDate"
+                      currentSortKey={fileSortConfig.key}
+                      currentDirection={fileSortConfig.direction}
+                      onSort={handleFileSort}
+                      align="center"
+                    />
+                  </th>
+                  <th className="px-4 py-3 min-w-[180px]">
+                    <SortHeader
+                      label="Причина паузы"
+                      columnKey="pauseReason"
+                      currentSortKey={fileSortConfig.key}
+                      currentDirection={fileSortConfig.direction}
+                      onSort={handleFileSort}
+                    />
+                  </th>
+                  <th className="px-4 py-3 text-center min-w-[120px]">
+                    <SortHeader
+                      label="В работе"
+                      columnKey="daysPassed"
+                      currentSortKey={fileSortConfig.key}
+                      currentDirection={fileSortConfig.direction}
+                      onSort={handleFileSort}
+                      align="center"
+                    />
+                  </th>
+                  <th className="px-4 py-3 text-right min-w-[100px]">
+                    <SortHeader
+                      label="SKU"
+                      columnKey="totalSku"
+                      currentSortKey={fileSortConfig.key}
+                      currentDirection={fileSortConfig.direction}
+                      onSort={handleFileSort}
+                      align="right"
+                    />
+                  </th>
+                </tr>
+              )}
+
+              {activeFileTab === 'queue' && (
+                <tr>
+                  <th className="px-4 py-3 min-w-[240px]">
+                    <SortHeader
+                      label="Имя файла"
+                      columnKey="fileName"
+                      currentSortKey={fileSortConfig.key}
+                      currentDirection={fileSortConfig.direction}
+                      onSort={handleFileSort}
+                    />
+                  </th>
+                  <th className="px-4 py-3 min-w-[160px]">
+                    <SortHeader
+                      label="Группа 3"
+                      columnKey="group3"
+                      currentSortKey={fileSortConfig.key}
+                      currentDirection={fileSortConfig.direction}
+                      onSort={handleFileSort}
+                    />
+                  </th>
+                  <th className="px-4 py-3 min-w-[175px]">
+                    <SortHeader
+                      label="Отдел"
+                      columnKey="department"
+                      currentSortKey={fileSortConfig.key}
+                      currentDirection={fileSortConfig.direction}
+                      onSort={handleFileSort}
+                    />
+                  </th>
+                  <th className="px-4 py-3 text-center min-w-[140px]">
+                    <SortHeader
+                      label="Дата поступления"
+                      columnKey="addedDate"
+                      currentSortKey={fileSortConfig.key}
+                      currentDirection={fileSortConfig.direction}
+                      onSort={handleFileSort}
+                      align="center"
+                    />
+                  </th>
+                  <th className="px-4 py-3 text-center min-w-[130px]">
+                    <SortHeader
+                      label="Ожидает"
+                      columnKey="daysPassed"
+                      currentSortKey={fileSortConfig.key}
+                      currentDirection={fileSortConfig.direction}
+                      onSort={handleFileSort}
+                      align="center"
+                    />
+                  </th>
+                  <th className="px-4 py-3 text-right min-w-[110px]">
+                    <SortHeader
+                      label="SKU"
+                      columnKey="totalSku"
+                      currentSortKey={fileSortConfig.key}
+                      currentDirection={fileSortConfig.direction}
+                      onSort={handleFileSort}
+                      align="right"
+                    />
+                  </th>
+                </tr>
+              )}
+            </thead>
+
+            <tbody className="divide-y divide-slate-100 bg-white">
+              {paginatedFiles.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={activeFileTab === 'inWorkAndPause' ? 9 : activeFileTab === 'completed' ? 7 : 6}
+                    className="px-4 py-10 text-center text-slate-400"
+                  >
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <FolderTree className="w-8 h-8 text-slate-300" />
+                      <p className="text-sm font-semibold text-slate-600">Файлы не найдены</p>
+                      <p className="text-xs text-slate-400">
+                        {searchFile ? 'Попробуйте изменить поисковый запрос' : 'В этой вкладке пока нет файлов'}
+                      </p>
+                    </div>
                   </td>
                 </tr>
               ) : (
-                sortedExecutors.map((row, i) => {
+                paginatedFiles.map(file => {
                   return (
-                    <tr key={i} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="px-4 py-2.5 font-bold text-slate-900">
-                        {row.executor}
-                      </td>
-                      <td className="px-4 py-2.5 text-slate-600">
-                        <span className={`px-2.5 py-0.5 rounded-md font-semibold text-[11px] ${
-                          row.department === 'Отдел контента'
-                            ? 'bg-sky-50 text-sky-800 border border-sky-200'
-                            : row.department === 'Коммерческий отдел'
-                            ? 'bg-indigo-50 text-indigo-800 border border-indigo-200'
-                            : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                        }`}>
-                          {row.department}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5 text-center font-bold font-mono text-emerald-600">
-                        {row.completedSku.toLocaleString('ru-RU')}
-                      </td>
-                      <td className="px-4 py-2.5 text-center font-bold font-mono text-blue-600">
-                        {row.inWorkSku.toLocaleString('ru-RU')}
-                      </td>
-                      <td className="px-4 py-2.5 text-center font-bold font-mono text-amber-600">
-                        {row.pausedSku.toLocaleString('ru-RU')}
-                      </td>
-                      <td className="px-4 py-2.5 text-center font-bold font-mono text-slate-500">
-                        {row.newSku.toLocaleString('ru-RU')}
-                      </td>
+                    <tr key={file.id} className="hover:bg-slate-50/80 transition-colors">
+                      {/* Tab 1: Completed Files Row */}
+                      {activeFileTab === 'completed' && (
+                        <>
+                          <td className="px-4 py-3 font-semibold text-slate-900">
+                            <div className="flex items-center gap-2">
+                              <FileText className="w-4 h-4 text-emerald-600 shrink-0" />
+                              <span className="truncate max-w-[280px]" title={file.fileName}>
+                                {file.fileName}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-slate-600">
+                            <span className="truncate max-w-[180px] block" title={file.group3}>
+                              {file.group3}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <span
+                              className={`px-2.5 py-1 rounded-md font-semibold text-[11px] whitespace-nowrap inline-block ${
+                                file.department === 'Отдел контента'
+                                  ? 'bg-sky-50 text-sky-800 border border-sky-200'
+                                  : file.department === 'Коммерческий отдел'
+                                  ? 'bg-indigo-50 text-indigo-800 border border-indigo-200'
+                                  : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                              }`}
+                            >
+                              {file.department}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-slate-800 font-medium">
+                            {file.executor}
+                          </td>
+                          <td className="px-4 py-3 text-center text-slate-600 font-mono">
+                            {file.completionDate || '—'}
+                          </td>
+                          <td className="px-4 py-3 text-center text-slate-500 font-mono">
+                            {file.addedDate || '—'}
+                          </td>
+                          <td className="px-4 py-3 text-right font-bold font-mono text-emerald-600 text-sm">
+                            {file.totalSku.toLocaleString('ru-RU')}
+                          </td>
+                        </>
+                      )}
+
+                      {/* Tab 2: In Work and On Pause Row */}
+                      {activeFileTab === 'inWorkAndPause' && (
+                        <>
+                          <td className="px-4 py-3">
+                            <span
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md font-semibold text-[11px] ${
+                                file.status === '🔄 В работе'
+                                  ? 'bg-blue-50 text-blue-800 border border-blue-200'
+                                  : 'bg-amber-50 text-amber-800 border border-amber-200'
+                              }`}
+                            >
+                              {file.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 font-semibold text-slate-900">
+                            <div className="flex items-center gap-2">
+                              <FileText className="w-4 h-4 text-blue-600 shrink-0" />
+                              <span className="truncate max-w-[260px]" title={file.fileName}>
+                                {file.fileName}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-slate-600">
+                            <span className="truncate max-w-[160px] block" title={file.group3}>
+                              {file.group3}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <span
+                              className={`px-2.5 py-1 rounded-md font-semibold text-[11px] whitespace-nowrap inline-block ${
+                                file.department === 'Отдел контента'
+                                  ? 'bg-sky-50 text-sky-800 border border-sky-200'
+                                  : file.department === 'Коммерческий отдел'
+                                  ? 'bg-indigo-50 text-indigo-800 border border-indigo-200'
+                                  : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                              }`}
+                            >
+                              {file.department}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-slate-800 font-medium">
+                            {file.executor}
+                          </td>
+                          <td className="px-4 py-3 text-center text-slate-600 font-mono">
+                            {file.status === '⏸️ На паузе'
+                              ? file.pauseDate || file.startDate || '—'
+                              : file.startDate || '—'}
+                          </td>
+                          <td className="px-4 py-3 text-slate-600">
+                            {file.pauseReason ? (
+                              <span
+                                className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 border border-amber-200 text-[11px] font-medium inline-block max-w-[200px] truncate"
+                                title={file.pauseReason}
+                              >
+                                {file.pauseReason}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400">—</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-center font-mono">
+                            <span
+                              className={`px-2 py-0.5 rounded-md text-[11px] font-semibold ${
+                                file.daysPassed > 10
+                                  ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                  : file.daysPassed > 5
+                                  ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                  : 'bg-slate-100 text-slate-700'
+                              }`}
+                            >
+                              {file.daysPassed} дн.
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right font-bold font-mono text-blue-600 text-sm">
+                            {file.totalSku.toLocaleString('ru-RU')}
+                          </td>
+                        </>
+                      )}
+
+                      {/* Tab 3: In Queue Row */}
+                      {activeFileTab === 'queue' && (
+                        <>
+                          <td className="px-4 py-3 font-semibold text-slate-900">
+                            <div className="flex items-center gap-2">
+                              <FileText className="w-4 h-4 text-slate-500 shrink-0" />
+                              <span className="truncate max-w-[320px]" title={file.fileName}>
+                                {file.fileName}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-slate-600">
+                            <span className="truncate max-w-[180px] block" title={file.group3}>
+                              {file.group3}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <span
+                              className={`px-2.5 py-1 rounded-md font-semibold text-[11px] whitespace-nowrap inline-block ${
+                                file.department === 'Отдел контента'
+                                  ? 'bg-sky-50 text-sky-800 border border-sky-200'
+                                  : file.department === 'Коммерческий отдел'
+                                  ? 'bg-indigo-50 text-indigo-800 border border-indigo-200'
+                                  : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                              }`}
+                            >
+                              {file.department}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center text-slate-600 font-mono">
+                            {file.addedDate || '—'}
+                          </td>
+                          <td className="px-4 py-3 text-center font-mono">
+                            <span
+                              className={`px-2 py-0.5 rounded-md text-[11px] font-semibold ${
+                                file.daysPassed > 10
+                                  ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                  : file.daysPassed > 5
+                                  ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                  : 'bg-slate-100 text-slate-700'
+                              }`}
+                            >
+                              {file.daysPassed} дн.
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right font-bold font-mono text-slate-800 text-sm">
+                            {file.totalSku.toLocaleString('ru-RU')}
+                          </td>
+                        </>
+                      )}
                     </tr>
                   );
                 })
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Pagination & Count footer */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 text-xs text-slate-500">
+          <div className="flex items-center gap-3">
+            <span>
+              Показано{' '}
+              <span className="font-semibold text-slate-900">
+                {filteredAndSortedFiles.length === 0 ? 0 : (fileCurrentPage - 1) * filePageSize + 1}–
+                {Math.min(filteredAndSortedFiles.length, fileCurrentPage * filePageSize)}
+              </span>{' '}
+              из <span className="font-semibold text-slate-900">{filteredAndSortedFiles.length}</span> файлов
+            </span>
+
+            <div className="flex items-center gap-1.5 border-l border-slate-200 pl-3">
+              <span>На странице:</span>
+              <select
+                value={filePageSize}
+                onChange={e => {
+                  setFilePageSize(Number(e.target.value));
+                  setFileCurrentPage(1);
+                }}
+                className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              >
+                <option value={15}>15</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Page controls */}
+          {totalFilePages > 1 && (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setFileCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={fileCurrentPage === 1}
+                className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                title="Предыдущая страница"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              <div className="flex items-center gap-1 px-1">
+                {Array.from({ length: Math.min(5, totalFilePages) }, (_, idx) => {
+                  let pageNum: number;
+                  if (totalFilePages <= 5) {
+                    pageNum = idx + 1;
+                  } else if (fileCurrentPage <= 3) {
+                    pageNum = idx + 1;
+                  } else if (fileCurrentPage >= totalFilePages - 2) {
+                    pageNum = totalFilePages - 4 + idx;
+                  } else {
+                    pageNum = fileCurrentPage - 2 + idx;
+                  }
+
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => setFileCurrentPage(pageNum)}
+                      className={`min-w-[28px] h-7 px-2 rounded-lg font-mono text-xs font-semibold transition-colors ${
+                        fileCurrentPage === pageNum
+                          ? 'bg-sky-600 text-white shadow-xs'
+                          : 'hover:bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                onClick={() => setFileCurrentPage(prev => Math.min(totalFilePages, prev + 1))}
+                disabled={fileCurrentPage === totalFilePages}
+                className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                title="Следующая страница"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1363,11 +1962,7 @@ export const AnalyticsTab: React.FC = () => {
               <span className="text-xl font-black text-emerald-950 font-mono">
                 {monthlySummary.totalCompleted.toLocaleString('ru-RU')}
               </span>
-              <span className="text-[11px] font-semibold text-emerald-600">
-                {monthlySummary.totalAdded > 0
-                  ? `${((monthlySummary.totalCompleted / monthlySummary.totalAdded) * 100).toFixed(0)}%`
-                  : '0%'}
-              </span>
+              <span className="text-[11px] font-semibold text-emerald-600">SKU</span>
             </div>
           </div>
         </div>

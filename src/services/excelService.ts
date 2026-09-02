@@ -228,7 +228,10 @@ export async function parseNewProductsBatchFile(
  */
 export function exportAnalyticsReportToExcel(reportData: {
   kpi: Record<string, any>[];
-  executors: Record<string, any>[];
+  filesCompleted?: Record<string, any>[];
+  filesInWorkAndPause?: Record<string, any>[];
+  filesInQueue?: Record<string, any>[];
+  executors?: Record<string, any>[];
   categories?: Record<string, any>[];
   pauseReasons: Record<string, any>[];
   monthlyStats?: Record<string, any>[];
@@ -245,17 +248,37 @@ export function exportAnalyticsReportToExcel(reportData: {
     XLSX.utils.book_append_sheet(workbook, monthWs, 'Помесячная динамика');
   }
 
-  // Sheet 3: Executors
-  const execWs = XLSX.utils.json_to_sheet(reportData.executors);
-  XLSX.utils.book_append_sheet(workbook, execWs, 'Исполнители');
+  // Sheet 3: Completed Files
+  if (reportData.filesCompleted && reportData.filesCompleted.length > 0) {
+    const doneWs = XLSX.utils.json_to_sheet(reportData.filesCompleted);
+    XLSX.utils.book_append_sheet(workbook, doneWs, 'Готовые файлы');
+  }
 
-  // Sheet 4: Categories (Group 3) - optional
+  // Sheet 4: Files In Work & On Pause
+  if (reportData.filesInWorkAndPause && reportData.filesInWorkAndPause.length > 0) {
+    const inWorkWs = XLSX.utils.json_to_sheet(reportData.filesInWorkAndPause);
+    XLSX.utils.book_append_sheet(workbook, inWorkWs, 'В работе и на паузе');
+  }
+
+  // Sheet 5: Files In Queue
+  if (reportData.filesInQueue && reportData.filesInQueue.length > 0) {
+    const queueWs = XLSX.utils.json_to_sheet(reportData.filesInQueue);
+    XLSX.utils.book_append_sheet(workbook, queueWs, 'В очереди');
+  }
+
+  // Sheet 6: Executors (if provided)
+  if (reportData.executors && reportData.executors.length > 0) {
+    const execWs = XLSX.utils.json_to_sheet(reportData.executors);
+    XLSX.utils.book_append_sheet(workbook, execWs, 'Исполнители');
+  }
+
+  // Sheet 7: Categories (Group 3) - optional
   if (reportData.categories && reportData.categories.length > 0) {
     const catWs = XLSX.utils.json_to_sheet(reportData.categories);
     XLSX.utils.book_append_sheet(workbook, catWs, 'Группы 3');
   }
 
-  // Sheet 5: Pause Reasons
+  // Sheet 8: Pause Reasons
   const pauseWs = XLSX.utils.json_to_sheet(reportData.pauseReasons);
   XLSX.utils.book_append_sheet(workbook, pauseWs, 'Причины пауз');
 

@@ -2,7 +2,7 @@
  * IndexedDB storage utility for large datasets (30,000+ products)
  */
 const DB_NAME = 'ContentOpsDB_v4';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export interface DBStores {
   products: 'products';
@@ -12,6 +12,7 @@ export interface DBStores {
   newProducts: 'newProducts';
   groupOrders: 'groupOrders';
   metadata: 'metadata';
+  bitrixLinks: 'bitrixLinks';
 }
 
 class IndexedDBManager {
@@ -50,6 +51,9 @@ class IndexedDBManager {
         }
         if (!db.objectStoreNames.contains('metadata')) {
           db.createObjectStore('metadata', { keyPath: 'key' });
+        }
+        if (!db.objectStoreNames.contains('bitrixLinks')) {
+          db.createObjectStore('bitrixLinks', { keyPath: 'code' });
         }
       };
 

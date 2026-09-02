@@ -182,6 +182,81 @@ const SHORT_MONTH_NAMES_RU: Record<number, string> = {
   12: 'Дек',
 };
 
+// Custom tooltip for Monthly Dynamics Chart displaying total monthly SKU and department breakdown
+const MonthlyDynamicsTooltip: React.FC<any> = ({ active, payload }) => {
+  if (!active || !payload || !payload.length) return null;
+  const data = payload[0]?.payload as MonthlySkuDynamicsPoint | undefined;
+  if (!data) return null;
+
+  const total = data.totalAdded || 0;
+  const content = data.contentAdded || 0;
+  const kam = data.kamAdded || 0;
+  const contentPct = total > 0 ? ((content / total) * 100).toFixed(1) : '0';
+  const kamPct = total > 0 ? ((kam / total) * 100).toFixed(1) : '0';
+
+  return (
+    <div className="bg-slate-900/95 backdrop-blur-md text-white px-3.5 py-3 rounded-xl shadow-2xl border border-slate-700/60 text-xs min-w-[240px] z-50 pointer-events-none">
+      <div className="flex items-center justify-between border-b border-slate-700/80 pb-2 mb-2.5">
+        <span className="font-bold text-slate-100 text-sm">📅 {data.monthFullLabel}</span>
+        {data.momGrowthPct !== null && (
+          <span
+            className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold ${
+              data.momGrowthPct >= 0
+                ? 'bg-emerald-950/90 text-emerald-400 border border-emerald-800/60'
+                : 'bg-rose-950/90 text-rose-400 border border-rose-800/60'
+            }`}
+          >
+            {data.momGrowthPct >= 0 ? `+${data.momGrowthPct}%` : `${data.momGrowthPct}%`} MoM
+          </span>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        {/* Total Added / Completed for Month */}
+        <div className="flex items-center justify-between bg-violet-950/60 px-2.5 py-1.5 rounded-lg border border-violet-800/60">
+          <span className="text-violet-200 font-bold flex items-center gap-1.5 text-xs">
+            <span className="w-2.5 h-2.5 rounded-full bg-violet-400 inline-block shadow-xs" />
+            Всего за месяц:
+          </span>
+          <span className="font-mono text-sm font-black text-violet-100">
+            {total.toLocaleString('ru-RU')} SKU
+          </span>
+        </div>
+
+        {/* Breakdown by department */}
+        <div className="pt-0.5 space-y-1.5 text-slate-300">
+          <div className="flex items-center justify-between px-1">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-sky-400 inline-block" />
+              Отдел контента:
+            </span>
+            <span className="font-mono font-bold text-sky-200">
+              {content.toLocaleString('ru-RU')} <span className="text-[10px] font-normal text-slate-400">({contentPct}%)</span>
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between px-1">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-indigo-400 inline-block" />
+              Коммерческий отдел:
+            </span>
+            <span className="font-mono font-bold text-indigo-200">
+              {kam.toLocaleString('ru-RU')} <span className="text-[10px] font-normal text-slate-400">({kamPct}%)</span>
+            </span>
+          </div>
+
+          {data.filesCount > 0 && (
+            <div className="flex items-center justify-between px-1 pt-1.5 border-t border-slate-800 text-[11px] text-slate-400">
+              <span>Обработано файлов:</span>
+              <span className="font-mono font-semibold text-slate-300">{data.filesCount}</span>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const AnalyticsTab: React.FC = () => {
   const [selectedDept, setSelectedDept] = useState<'all' | DepartmentType>('all');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -190,7 +265,7 @@ export const AnalyticsTab: React.FC = () => {
   const [selectedPeriod, setSelectedPeriod] = useState<string>('current');
 
   // Bottom Monthly Chart settings
-  const [monthlyChartMode, setMonthlyChartMode] = useState<'stacked' | 'compare' | 'trend'>('stacked');
+  const [monthlyChartMode, setMonthlyChartMode] = useState<'stacked' | 'trend'>('stacked');
   const [showMonthlyTable, setShowMonthlyTable] = useState(false);
 
   // Modals state
@@ -624,7 +699,7 @@ export const AnalyticsTab: React.FC = () => {
       .sort((a, b) => b.count - a.count);
   }, [filteredProducts]);
 
-  // 4. Monthly SKU Addition Dynamics (All Months)
+  // 4. Monthly SKU Addition Dynamics (All Months - STRICTLY COMPLETED ONLY)
   const monthlySkuDynamics = useMemo<MonthlySkuDynamicsPoint[]>(() => {
     const monthMap = new Map<string, {
       year: number;
@@ -637,14 +712,20 @@ export const AnalyticsTab: React.FC = () => {
     }>();
 
     allProducts.forEach(p => {
-      // 1. Added SKU by upload / intake date
-      const uObj = parseDateParts(p.dateUploaded || p.dateTaken);
-      if (uObj) {
-        const key = `${uObj.year}-${String(uObj.month).padStart(2, '0')}`;
+      const s = (p.status || '').toLowerCase().trim();
+      // Exclude products that are in status 'новое', 'в работе', 'на паузе'
+      // Strictly ONLY completed products
+      const isDone = s.includes('выполн') || s.includes('заверш') || s.includes('готов');
+      if (!isDone) return;
+
+      const dateStr = p.dateCompleted || p.dateFinished || p.dateUploaded || p.dateTaken;
+      const dObj = parseDateParts(dateStr);
+      if (dObj) {
+        const key = `${dObj.year}-${String(dObj.month).padStart(2, '0')}`;
         if (!monthMap.has(key)) {
           monthMap.set(key, {
-            year: uObj.year,
-            month: uObj.month,
+            year: dObj.year,
+            month: dObj.month,
             totalAdded: 0,
             contentAdded: 0,
             kamAdded: 0,
@@ -654,6 +735,7 @@ export const AnalyticsTab: React.FC = () => {
         }
         const entry = monthMap.get(key)!;
         entry.totalAdded++;
+        entry.completed++;
         if (p.department === 'Отдел контента') {
           entry.contentAdded++;
         } else if (p.department === 'Коммерческий отдел') {
@@ -661,27 +743,6 @@ export const AnalyticsTab: React.FC = () => {
         }
         if (p.sourceFile) {
           entry.files.add(p.sourceFile);
-        }
-      }
-
-      // 2. Completed SKU by completion date
-      const isDone = (p.status || '').toLowerCase().includes('выполн');
-      if (isDone) {
-        const dObj = parseDateParts(p.dateCompleted || p.dateFinished);
-        if (dObj) {
-          const key = `${dObj.year}-${String(dObj.month).padStart(2, '0')}`;
-          if (!monthMap.has(key)) {
-            monthMap.set(key, {
-              year: dObj.year,
-              month: dObj.month,
-              totalAdded: 0,
-              contentAdded: 0,
-              kamAdded: 0,
-              completed: 0,
-              files: new Set(),
-            });
-          }
-          monthMap.get(key)!.completed++;
         }
       }
     });
@@ -1832,11 +1893,11 @@ export const AnalyticsTab: React.FC = () => {
                   Динамика добавления SKU по месяцам
                 </h3>
                 <span className="text-[11px] font-bold text-violet-700 bg-violet-50 px-2.5 py-0.5 rounded-full border border-violet-200">
-                  Все месяцы ({monthlySkuDynamics.length})
+                  Только выполненные ({monthlySkuDynamics.length} мес.)
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                Помесячный объем поступления карточек в работу с разбивкой по отделам и сравнением с выводом
+                Помесячный объем выполненных карточек товаров с разбивкой по отделам (товары в статусах «Новый», «В работе» и «На паузе» исключены)
               </p>
             </div>
           </div>
@@ -1856,19 +1917,6 @@ export const AnalyticsTab: React.FC = () => {
               >
                 <Layers className="w-3.5 h-3.5 text-violet-600" />
                 <span>По отделам</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setMonthlyChartMode('compare')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                  monthlyChartMode === 'compare'
-                    ? 'bg-white text-emerald-900 shadow-xs font-extrabold'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-                title="Сравнить количество добавленных SKU с выведенными в каждом месяце"
-              >
-                <BarChart2 className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Добавлено vs Выведено</span>
               </button>
               <button
                 type="button"
@@ -1987,25 +2035,7 @@ export const AnalyticsTab: React.FC = () => {
                     interval={0}
                   />
                   <YAxis tick={{ fontSize: 11, fill: '#64748b' }} />
-                  <Tooltip
-                    formatter={(val: number | string | undefined, name: string | undefined) => [
-                      `${Number(val || 0).toLocaleString('ru-RU')} SKU`,
-                      name || '',
-                    ]}
-                    labelFormatter={label => {
-                      const item = monthlySkuDynamics.find(m => m.monthLabel === label);
-                      return item ? `📅 ${item.monthFullLabel}` : label;
-                    }}
-                    contentStyle={{
-                      backgroundColor: '#0f172a',
-                      color: '#ffffff',
-                      borderRadius: '10px',
-                      fontSize: '12px',
-                      border: 'none',
-                      boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)',
-                    }}
-                    itemStyle={{ color: '#ffffff' }}
-                  />
+                  <Tooltip content={<MonthlyDynamicsTooltip />} />
                   <Legend
                     verticalAlign="top"
                     align="right"
@@ -2036,55 +2066,6 @@ export const AnalyticsTab: React.FC = () => {
                     />
                   )}
                 </BarChart>
-              ) : monthlyChartMode === 'compare' ? (
-                <BarChart
-                  data={monthlySkuDynamics}
-                  margin={{ top: 15, right: 15, left: -5, bottom: 15 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis
-                    dataKey="monthLabel"
-                    tick={{ fontSize: 11, fill: '#334155', fontWeight: 600 }}
-                    interval={0}
-                  />
-                  <YAxis tick={{ fontSize: 11, fill: '#64748b' }} />
-                  <Tooltip
-                    formatter={(val: number | string | undefined, name: string | undefined) => [
-                      `${Number(val || 0).toLocaleString('ru-RU')} SKU`,
-                      name || '',
-                    ]}
-                    labelFormatter={label => {
-                      const item = monthlySkuDynamics.find(m => m.monthLabel === label);
-                      return item ? `📅 ${item.monthFullLabel}` : label;
-                    }}
-                    contentStyle={{
-                      backgroundColor: '#0f172a',
-                      color: '#ffffff',
-                      borderRadius: '10px',
-                      fontSize: '12px',
-                      border: 'none',
-                      boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)',
-                    }}
-                    itemStyle={{ color: '#ffffff' }}
-                  />
-                  <Legend
-                    verticalAlign="top"
-                    align="right"
-                    wrapperStyle={{ paddingBottom: '12px', fontSize: '11px', fontWeight: 600 }}
-                  />
-                  <Bar
-                    dataKey="Всего добавлено"
-                    fill="#6366f1"
-                    name="📥 Поступило / Добавлено"
-                    radius={[4, 4, 0, 0]}
-                  />
-                  <Bar
-                    dataKey="Выведено"
-                    fill="#10b981"
-                    name="✅ Выведено / Завершено"
-                    radius={[4, 4, 0, 0]}
-                  />
-                </BarChart>
               ) : (
                 <AreaChart
                   data={monthlySkuDynamics}
@@ -2095,10 +2076,6 @@ export const AnalyticsTab: React.FC = () => {
                       <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4} />
                       <stop offset="95%" stopColor="#6366f1" stopOpacity={0.0} />
                     </linearGradient>
-                    <linearGradient id="colorCompleted" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
-                    </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis
@@ -2107,25 +2084,7 @@ export const AnalyticsTab: React.FC = () => {
                     interval={0}
                   />
                   <YAxis tick={{ fontSize: 11, fill: '#64748b' }} />
-                  <Tooltip
-                    formatter={(val: number | string | undefined, name: string | undefined) => [
-                      `${Number(val || 0).toLocaleString('ru-RU')} SKU`,
-                      name || '',
-                    ]}
-                    labelFormatter={label => {
-                      const item = monthlySkuDynamics.find(m => m.monthLabel === label);
-                      return item ? `📅 ${item.monthFullLabel}` : label;
-                    }}
-                    contentStyle={{
-                      backgroundColor: '#0f172a',
-                      color: '#ffffff',
-                      borderRadius: '10px',
-                      fontSize: '12px',
-                      border: 'none',
-                      boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)',
-                    }}
-                    itemStyle={{ color: '#ffffff' }}
-                  />
+                  <Tooltip content={<MonthlyDynamicsTooltip />} />
                   <Legend
                     verticalAlign="top"
                     align="right"
@@ -2138,17 +2097,7 @@ export const AnalyticsTab: React.FC = () => {
                     strokeWidth={2.5}
                     fillOpacity={1}
                     fill="url(#colorTotalAdded)"
-                    name="📥 Добавлено SKU"
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="Выведено"
-                    stroke="#10b981"
-                    strokeWidth={2}
-                    strokeDasharray="4 4"
-                    fillOpacity={1}
-                    fill="url(#colorCompleted)"
-                    name="✅ Выведено SKU"
+                    name="📈 Выполнено SKU"
                   />
                 </AreaChart>
               )}
